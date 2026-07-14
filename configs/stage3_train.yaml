@@ -1,0 +1,131 @@
+project:
+  name: armenian-qwen3-sft
+  seed: 3407
+  stage: stage3_linear_decay
+
+model:
+  name: Qwen/Qwen3-4B-Instruct-2507
+  tokenizer_name: Qwen/Qwen3-4B-Instruct-2507
+  trust_remote_code: true
+  torch_dtype: float16
+
+  quantization:
+    load_in_4bit: true
+    bnb_4bit_quant_type: nf4
+    bnb_4bit_use_double_quant: true
+    bnb_4bit_compute_dtype: float16
+
+lora:
+  enabled: true
+
+  # Continue from the Stage 2 adapter.
+  adapter_checkpoint: outputs/stage2_constant/final_adapter
+
+  r: 8
+  alpha: 8
+  dropout: 0.05
+  bias: none
+  task_type: CAUSAL_LM
+
+  target_modules:
+    - q_proj
+    - k_proj
+    - v_proj
+    - o_proj
+    - gate_proj
+    - up_proj
+    - down_proj
+
+data:
+  train_file: /home/metric/Desktop/Taron1/armenian_LLM/processed_datasets/clean_sft_v3_conservative/stage3_train.jsonl
+  eval_file: /home/metric/Desktop/Taron1/armenian_LLM/processed_datasets/clean_sft_v3_conservative/stage3_validation.jsonl
+  dataset_text_field: text
+
+sequence:
+  max_seq_length: 1024
+  truncation: true
+  padding: false
+
+loss:
+  mode: assistant_only
+  response_marker: "<|im_start|>assistant\n"
+  end_marker: "<|im_end|>"
+
+batching:
+  train_batch_size: 1
+  eval_batch_size: 1
+  pad_to_multiple_of: null
+
+optimizer:
+  name: adamw
+
+  # Starts at 2e-4 and decreases toward zero.
+  learning_rate: 2.0e-4
+
+  weight_decay: 0.1
+  beta1: 0.9
+  beta2: 0.999
+  eps: 1.0e-8
+
+scheduler:
+  # Hugging Face linear scheduler:
+  # 2e-4 → 0 across the complete Stage 3.
+  name: linear
+  warmup_steps: 0
+  warmup_ratio: 0.0
+  min_lr_ratio: 0.0
+
+training:
+  output_dir: outputs/stage3_linear_decay
+  final_adapter_dir: outputs/stage3_linear_decay/final_adapter
+
+  num_train_epochs: 1
+  gradient_accumulation_steps: 8
+
+  fp16: true
+  bf16: false
+  gradient_checkpointing: true
+  max_grad_norm: 1.0
+
+  logging_steps: 5
+  eval_steps: 5
+
+  save_steps: 20
+  save_total_limit: 20
+
+  resume_from_checkpoint: null
+
+wandb:
+  enabled: true
+  project: armenian-qwen3-sft
+  run_name: qwen3-4b-arm-stage3-linear-decay
+  entity: null
+
+custom_evaluation:
+  enabled: true
+  eval_steps: 10
+  seed: 3407
+  batch_size: 1
+
+  wikipedia:
+    enabled: true
+    path: /home/metric/Desktop/data/wikipedia_eval/data/train-00000-of-00001.parquet
+    text_field: text
+    lang_field: lang
+
+    languages:
+      armenian: hy
+      english: en
+
+    max_samples_per_language: 20
+    max_chunks_per_language: 20
+    block_size: 512
+
+  tatoeba:
+    enabled: true
+    path: /home/metric/Desktop/data/tatoeba/data/train-00000-of-00001.parquet
+    translation_field: translation
+    armenian_key: hy
+    english_key: en
+    max_pairs: 20
+    block_size: 256
